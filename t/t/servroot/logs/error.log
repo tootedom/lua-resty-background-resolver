@@ -1,0 +1,21 @@
+2018/07/07 21:47:07 [notice] 1306#0: using the "epoll" event method
+2018/07/07 21:47:07 [notice] 1306#0: openresty/1.13.6.2
+2018/07/07 21:47:07 [notice] 1306#0: built by gcc 7.2.1 20170915 (Red Hat 7.2.1-2) (GCC) 
+2018/07/07 21:47:07 [notice] 1306#0: OS: Linux 4.9.87-linuxkit-aufs
+2018/07/07 21:47:07 [notice] 1306#0: getrlimit(RLIMIT_NOFILE): 1048576:1048576
+2018/07/07 21:47:07 [error] 1307#0: *2 recv() failed (111: Connection refused), context: ngx.timer
+2018/07/07 21:47:07 [error] 1307#0: *2 recv() failed (111: Connection refused), context: ngx.timer
+2018/07/07 21:47:07 [error] 1307#0: *2 recv() failed (111: Connection refused), context: ngx.timer
+2018/07/07 21:47:07 [error] 1307#0: *2 recv() failed (111: Connection refused), context: ngx.timer
+2018/07/07 21:47:07 [error] 1307#0: *2 recv() failed (111: Connection refused), context: ngx.timer
+2018/07/07 21:47:09 [info] 1307#0: *5 [lua] background-resolver.lua:110: _maybe_update_servers(): Different in number of available addresses.  Updating Available Addresses for:www.google.com, context: ngx.timer
+2018/07/07 21:47:11 [error] 1307#0: *7 lua udp socket read timed out, context: ngx.timer
+2018/07/07 21:47:11 [error] 1307#0: *7 lua udp socket read timed out, context: ngx.timer
+2018/07/07 21:47:11 [error] 1307#0: *7 lua udp socket read timed out, context: ngx.timer
+2018/07/07 21:47:11 [error] 1307#0: *7 lua udp socket read timed out, context: ngx.timer
+2018/07/07 21:47:11 [error] 1307#0: *7 lua udp socket read timed out, context: ngx.timer
+2018/07/07 21:47:11 [notice] 1307#0: signal 15 (SIGTERM) received from 1166, exiting
+2018/07/07 21:47:11 [notice] 1307#0: signal 3 (SIGQUIT) received from 1166, shutting down
+2018/07/07 21:47:11 [info] 1307#0: epoll_wait() failed (4: Interrupted system call)
+2018/07/07 21:47:11 [notice] 1307#0: exiting
+2018/07/07 21:47:11 [notice] 1307#0: exit
