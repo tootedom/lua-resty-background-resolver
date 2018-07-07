@@ -20,8 +20,8 @@ local ngx_timer = ngx.timer
 
 local default_refresh_interval = 30
 local default_dns_resolver = {{ '8.8.8.8', 53 }}
-local default_dns_timeout = 2
-local default_dns_retries = 5
+local default_dns_timeout = 2000
+local default_dns_retries = 3
 local balancing_type_round_robin = "round_robin"
 local balancing_type_chash = "chash"
 
@@ -34,7 +34,10 @@ function background_resolver.new(dns_name, cfg)
         ['addresses_as_string'] = "",
         ['addresses_as_array'] = {},
         ['size'] = 0,
-        ['no_of_updates'] = 0
+        ['no_of_updates'] = 0,
+        ['balancing'] = {
+            ['size'] = 0
+        }
     }
 
 
@@ -96,7 +99,8 @@ function background_resolver.new(dns_name, cfg)
         else
             new_current_servers['balancing'] = {
                 ['chash'] = resty_chash:new(resolved_addresses),
-                ['addresses'] = resolved_addresses
+                ['addresses'] = resolved_addresses,
+                ['size'] = resolved_addresses_size
             }
         end
 
@@ -138,6 +142,9 @@ function background_resolver.new(dns_name, cfg)
 
             local answers, err, tries = dns_resolver:query(dns_name, { qtype = resolver.TYPE_A }, {})
 
+            if err ~= nil then
+                ngx_log(ngx.CRIT,"failure in dns",err)
+            end
             if answers then
                 if not answers.errcode then
                     local current_servers = {}
@@ -145,10 +152,12 @@ function background_resolver.new(dns_name, cfg)
                     local number_of_valid_addresses = 0
                     for i, ans in ipairs(answers) do
                         local address = ans.address
-                        if cfg['ip_black_list'][address] == nil then
-                            current_servers[ans.address] = 1
-                            number_of_valid_addresses = number_of_valid_addresses + 1
-                            current_servers_array[number_of_valid_addresses] = ans.address
+                        if address ~= nil then
+                            if cfg['ip_black_list'][address] == nil then
+                                current_servers[ans.address] = 1
+                                number_of_valid_addresses = number_of_valid_addresses + 1
+                                current_servers_array[number_of_valid_addresses] = ans.address
+                            end
                         end
                     end
 
@@ -167,17 +176,25 @@ function background_resolver.new(dns_name, cfg)
 
     local function round_robin(key)
         local balancer = current_servers['balancing']
-        local next_index = balancer['current_rr_index'] + 1
-        local current_index = ( ( next_index ) % balancer['size'] ) + 1
-        balancer['current_rr_index'] = next_index
-        return balancer['addresses_as_array'][current_index]
+        if balancer['size']>0 then
+            local next_index = balancer['current_rr_index'] + 1
+            local current_index = ( ( next_index ) % balancer['size'] ) + 1
+            balancer['current_rr_index'] = next_index
+            return balancer['addresses_as_array'][current_index]
+        else
+            return nil
+        end
     end
 
     local function chash(key)
         local balancer = current_servers['balancing']
-        local chash = balancer['chash']
-        local index = chash:find(key)
-        return index
+        if balancer['size']>0 then
+            local chash = balancer['chash']
+            local index = chash:find(key)
+            return index
+        else
+            return nil
+        end
     end
 
     -- Init
