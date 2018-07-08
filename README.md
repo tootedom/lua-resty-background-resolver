@@ -353,7 +353,9 @@ wrk -t1 -c1 -d30s -R2 http://localhost:81/chash/etc/passwd
 - librestychash.so in the root of this project is licensed under BSD from: https://github.com/openresty/lua-resty-balancer 
   You should install and compile for your platform/distribution.  It is here as a means for testing
 
-- chash.lus in the root of this project is licensed under BSD from: https://github.com/openresty/lua-resty-balancer 
+- chash.lua in the root of this project is licensed under BSD from: https://github.com/openresty/lua-resty-balancer 
+  Is it here as a mean for testing.  You should install it from the  https://github.com/openresty/lua-resty-balancer repo for
+  your platform
 
 - TestDNS.pm is licensed under BSD from: https://raw.githubusercontent.com/openresty/lua-resty-dns
-
+  Is it here as a mean for testing.
