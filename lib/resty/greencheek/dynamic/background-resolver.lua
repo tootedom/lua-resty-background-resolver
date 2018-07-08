@@ -20,8 +20,8 @@ local ngx_timer = ngx.timer
 
 local default_refresh_interval = 30
 local default_dns_resolver = {{ '8.8.8.8', 53 }}
-local default_dns_timeout = 2000
-local default_dns_retries = 3
+local default_dns_timeout = 1000
+local default_dns_retries = 2
 local balancing_type_round_robin = "round_robin"
 local balancing_type_chash = "chash"
 
@@ -67,7 +67,7 @@ function background_resolver.new(dns_name, cfg)
         end
 
         if cfg['balancing_type'] == nil then
-            cfg['balancing_type'] = balancing_type_chash
+            cfg['balancing_type'] = balancing_type_round_robin
         end
 
         return cfg
@@ -182,7 +182,7 @@ function background_resolver.new(dns_name, cfg)
             balancer['current_rr_index'] = next_index
             return balancer['addresses_as_array'][current_index]
         else
-            return nil
+            return nil,"no_peers_available"
         end
     end
 
@@ -193,7 +193,7 @@ function background_resolver.new(dns_name, cfg)
             local index = chash:find(key)
             return index
         else
-            return nil
+            return nil,"no_peers_available"
         end
     end
 
@@ -209,7 +209,7 @@ function background_resolver.new(dns_name, cfg)
     local ok, err = ngx_timer.at(0, refresh, dns_name, cfg)
     if not ok then
         ngx_log(ngx.CRIT, "Failed to start background dns resolution", err)
-        return nil
+        return nil,"failed_to_start_timer"
     end
 
     local self = {
