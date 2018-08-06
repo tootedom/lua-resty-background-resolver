@@ -1,0 +1,10 @@
+    server 0.0.0.1;
+    balancer_by_lua_block {
+        local b = require "ngx.balancer"
+        local dns = require 'resty.greencheek.dynamic.multi-background-resolver'
+        local server, err = dns.next(ngx.var.uri, ngx.var.appname)
+        if err == nil then
+            assert(b.set_current_peer(server,ngx.var.appname_port))
+        end
+    }
+
