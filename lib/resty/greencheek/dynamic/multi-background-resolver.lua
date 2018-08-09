@@ -18,6 +18,7 @@ local ngx = ngx
 local ngx_log = ngx.log
 local ngx_info = ngx.INFO
 local ngx_crit = ngx.CRIT
+local ngx_warn = ngx.WARN
 local ngx_timer = ngx.timer
 
 local default_refresh_interval = 30
@@ -88,10 +89,9 @@ function _M.start(dns_names, cfg)
         return cfg
     end
 
-    local function is_diff(dns_id,resolved_addresses,resolved_addresses_array,current_servers,current_servers_as_string)
+    local function is_diff(dns_id,resolved_addresses,resolved_addresses_array,current_servers)
         for k,v in pairs(resolved_addresses) do
             if current_servers[k] == nil then
-                ngx_log(ngx_info,"Addressed changed (",dns_id,") from ", current_servers_as_string, " to ",table.concat(resolved_addresses_array,", "))
                 return true
             end
         end
@@ -105,7 +105,8 @@ function _M.start(dns_names, cfg)
             ['addresses_as_string'] = table.concat(resolved_addresses_array,", "),
             ['size'] = resolved_addresses_size,
             ['no_of_updates'] = (dns_entry_info['no_of_updates'] + 1),
-            ['balancer_method'] = dns_entry_info['balancer_method']
+            ['balancer_method'] = dns_entry_info['balancer_method'],
+            ['fallback'] = dns_entry_info['fallback']
         }
 
         if balancing_type == balancing_type_round_robin then
@@ -130,14 +131,35 @@ function _M.start(dns_names, cfg)
         local dns_entry_info = data[dns_name['id']]
 
         if dns_entry_info == nil or dns_entry_info['size'] ~= resolved_addresses_size then
-            ngx_log(ngx_info,"Different in number of available addresses.  Updating Available Addresses for ",dns_name['dns_name'])
+            if resolved_addresses_size>0 then
+                ngx_log(ngx_info,"Addresses changed (",dns_name['id'],") from [", dns_entry_info['addresses_as_string'], "] to [",table.concat(resolved_addresses_array,", "),"]")
+            else
+                ngx_log(ngx_info,"Addresses changed (",dns_name['id'],") from [", dns_entry_info['addresses_as_string'], "] to []")
+            end
             update_servers(dns_name,resolved_addresses,resolved_addresses_array, resolved_addresses_size, balancing_type)
         else
-            if is_diff(dns_name['id'],resolved_addresses,resolved_addresses_array,dns_entry_info['addresses'],dns_entry_info['addresses_as_string']) then
-                ngx_log(ngx_info,"Difference in addresses.  Updating Available Addresses for ",dns_name['dns_name'])
+            if is_diff(dns_name['id'],resolved_addresses,resolved_addresses_array,dns_entry_info['addresses']) then
+                ngx_log(ngx_info,"Addresses changed (",dns_name['id'],") from [", dns_entry_info['addresses_as_string'], "] to [",table.concat(resolved_addresses_array,", "),"]")
                 update_servers(dns_name,resolved_addresses,resolved_addresses_array, resolved_addresses_size, balancing_type)
             end
         end
+    end
+
+    local function _can_update_servers(number_of_ips, had_blacklisted_ips, dns_name)
+        if number_of_ips>0 then
+            return true
+        end
+
+        -- If dns actually returned no addresses.
+        if dns_name['fallback'] ~= nil and had_blacklisted_ips == false then
+            return true
+        end
+
+        if dns_name['allow_zero_ips'] ~= nil and dns_name['allow_zero_ips'] == true then
+            return true
+        end
+
+        return false
     end
 
     local function _resolve_name(dns_resolver, dns_name,cfg)
@@ -146,13 +168,15 @@ function _M.start(dns_names, cfg)
         local answers, err, tries = dns_resolver:query(dns_name['dns_name'], { qtype = resolver.TYPE_A }, {})
 
         if err ~= nil then
-            ngx_log(ngx_crit,"failure in dns",err)
+            ngx_log(ngx_crit,"failure in dns of (",dns_name['dns_name'],"):",err)
         end
         if answers then
+            local resolved_servers = {}
+            local resolved_servers_array = {}
+            local number_of_valid_addresses = 0
+            local had_blacklisted_ips = false
+
             if not answers.errcode then
-                local resolved_servers = {}
-                local resolved_servers_array = {}
-                local number_of_valid_addresses = 0
                 for i, ans in ipairs(answers) do
                     local address = ans.address
                     if address ~= nil then
@@ -160,12 +184,21 @@ function _M.start(dns_names, cfg)
                             resolved_servers[ans.address] = 1
                             number_of_valid_addresses = number_of_valid_addresses + 1
                             resolved_servers_array[number_of_valid_addresses] = ans.address
+                        else
+                            had_blacklisted_ips = true
                         end
                     end
                 end
 
-                if number_of_valid_addresses>0 then
+                if _can_update_servers(number_of_valid_addresses,had_blacklisted_ips, dns_name) then
                     _maybe_update_servers( dns_name, resolved_servers, resolved_servers_array, number_of_valid_addresses, cfg['balancing_type'])
+                end
+            else
+                if answers.errcode == 3 or answers.errcode == 5 then
+                    ngx_log(ngx_warn,"No resolved addresses for: ",dns_name['dns_name'])
+                    if _can_update_servers(number_of_valid_addresses, had_blacklisted_ips, dns_name) then
+                        _maybe_update_servers( dns_name, resolved_servers, resolved_servers_array, number_of_valid_addresses, cfg['balancing_type'])
+                    end
                 end
             end
         end
@@ -236,6 +269,9 @@ function _M.start(dns_names, cfg)
             name_info = dns_name
         end
 
+        if name_info['id'] == nil then
+            name_info['id'] = dns_name
+        end
 
         if data[name_info['id']] == nil then
             local config = {
@@ -248,6 +284,10 @@ function _M.start(dns_names, cfg)
                     ['size'] = 0
                 }
             }
+
+            if name_info['fallback'] ~= nil then
+                config['fallback'] = name_info['fallback']
+            end
 
             if name_info['balancing_type'] == nil then
                 config['balancer_method'] = get_balancer(cfg['balancing_type'])
@@ -279,7 +319,16 @@ function _M.updated(id)
 end
 
 function _M.next(key,id)
-    return data[id]['balancer_method'](key,id)
+    local primary = data[id]
+    local fallback_dns_id = primary['fallback']
+
+    local server, err = primary['balancer_method'](key,id)
+    if server == nil and fallback_dns_id ~= nil then
+        ngx_log(ngx_warn,"Using fallback of(",fallback_dns_id,") for ",id)
+        server, err = data[fallback_dns_id]['balancer_method'](key,fallback_dns_id)
+    end
+
+    return server, err
 end
 
 return _M
