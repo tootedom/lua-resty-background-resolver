@@ -5,4 +5,5 @@ export PERL5LIB=/root/perl5/lib/perl5:${PERL5LIB}
 
 cd /data/t
 
-prove sanity.t
+prove legacy.t
+prove multi.t

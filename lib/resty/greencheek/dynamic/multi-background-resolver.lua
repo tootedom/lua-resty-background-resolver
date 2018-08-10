@@ -170,6 +170,7 @@ function _M.start(dns_names, cfg)
         if err ~= nil then
             ngx_log(ngx_crit,"failure in dns of (",dns_name['dns_name'],"):",err)
         end
+
         if answers then
             local resolved_servers = {}
             local resolved_servers_array = {}
@@ -223,6 +224,7 @@ function _M.start(dns_names, cfg)
                 dns_resolver._id = cfg['dns_resolver_id']
             end
 
+
             for i, dns_name in ipairs(dns_names) do
                 _resolve_name(dns_resolver, dns_name, cfg)
             end
@@ -258,6 +260,10 @@ function _M.start(dns_names, cfg)
     _defaults(cfg)
 
     local names_to_lookup = {}
+
+    if type(dns_names) == "string" then
+        dns_names = { dns_names }
+    end
 
     for i,dns_name in ipairs(dns_names) do
         local name_info = {}
@@ -308,6 +314,7 @@ function _M.start(dns_names, cfg)
         return nil,"failed_to_start_timer"
     end
 
+
 end
 
 function _M.get_addresses_as_string(id)
@@ -321,7 +328,6 @@ end
 function _M.next(key,id)
     local primary = data[id]
     local fallback_dns_id = primary['fallback']
-
     local server, err = primary['balancer_method'](key,id)
     if server == nil and fallback_dns_id ~= nil then
         ngx_log(ngx_warn,"Using fallback of(",fallback_dns_id,") for ",id)

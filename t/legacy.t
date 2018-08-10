@@ -47,12 +47,12 @@ init_worker_by_lua_block {
     id => 125,
     opcode => 0,
     qname => 'www.google.com',
-    answer => [{ name => "www.google.com", ipv4 => "127.0.0.1", ttl => 123456 }],
+    answer => [{ name => "www.google.com", ipv4 => "127.0.0.2", ttl => 123456 }],
 }
 --- request
 GET /t
 --- response_body
-records: 127.0.0.1
+records: 127.0.0.2
 --- timeout: 600
 
 === TEST 2: multi returned server
