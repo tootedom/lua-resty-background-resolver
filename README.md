@@ -13,6 +13,10 @@
     - [Legacy Example](#legacy-example)
 - [Configuration](#configuration)
     - [Configuration Defaults](#configuration-defaults)
+    - [Fallback](#fallback)
+    - [Blacklist and No IPs for DNS Lookup](#blacklist-and-no-ips-for-dns-lookup)
+        - [Zero IPS and Caching](#zero-ips-and-caching)
+        - [Specifying the IP Black List](#specifying-the-ip-black-list)
 - [Limitations](#limitations)
 - [API Specification](#api-specification)
     - [Create a background resolution](#create-a-background-resolution)
@@ -182,6 +186,26 @@ The `start` method uses an nginx timer to periodically resolve each hostname in 
 
 The `start` method can be call multiple times, to setup resolution of dns names in separate timers.
 
+You then use the `lookup_id` within a [balancer_by_lua_block](https://github.com/openresty/lua-nginx-module#balancer_by_lua_block) to set the peer to connect to
+
+```
+upstream bbc_upstream {
+    server 0.0.0.1;
+    balancer_by_lua_block {
+        local b = require "ngx.balancer"
+        local dns = require 'resty.greencheek.dynamic.multi-background-resolver'
+
+        local server, err = dns.next(ngx.var.uri, 'bbc')
+        if err == nil then
+            assert(b.set_current_peer(server,443))
+        end
+    }
+    keepalive 10;
+}
+```
+
+
+
 
 
 ## Legacy Configuration
@@ -350,6 +374,71 @@ The following is an example of the configuration defaults.  Any parameter not ov
 
 ----
 
+## Fallback
+
+When setting up the dns resolution, you can specify a fallback.
+
+The fallback will be used when no ips exist for the primary dns lookup.
+
+An example of when this occur is in AWS.  If you have 2 dns entries, one for each az.  
+If the local AZ is having an issue, and no ips existing in the current zone (lack of instance types for the upstream), then the
+fallback can be that of an alternate AZ.
+
+The following shows the use of the `fallback`.  You should ensure that the fallback is resolved first
+
+```
+        local addresses_to_lookup = {}
+        table.insert(addresses_to_lookup,{ ['id'] = 'google', ['dns_name'] = 'www.google.co.uk' })
+        table.insert(addresses_to_lookup,{ ['id'] = 'north', ['dns_name'] = 'domsd.thenorth.dom' , ['fallback'] = 'google'})
+
+        local obj, err = dns.start(addresses_to_lookup, local_resolver)
+        if err ~= nil then
+            ngx.log(ngx.CRIT,"Unable to start dns resolution",err)
+        end
+```
+
+----
+
+## Blacklist and No IPs for DNS Lookup
+
+### Zero IPS and Caching
+
+By default, when no fallback has been specified for a dns entry; and the dns resolution is resulting in zero ips
+the old (cached) resolved IPs are used.  There are several options available if this is not desireable.
+
+If a fallback has been specified, and the zero ips was not a result of blacklist ips being removed from the dns resolution result.
+Then that old cached ip are not used.
+
+If you want zero ips to not result in cached ips be using you specify `allow_zero_ips` in the dns table:
+
+```
+table.insert(addresses_to_lookup,{ ['id'] = 'north', ['dns_name'] = 'domsd.thenorth.dom' , ['fallback'] = 'google' , ['allow_zero_ips'] = true })
+```
+
+### Specifying the IP Black List
+
+When dns resolution occurs, it might be possible for a ip to be returned that you know shoud not be used.  One example is the icann name collision
+address `127.0.53.53`.  This is way by default this is the ip blacklist.
+
+
+Here is an example of how to specify a different set of black listed ips addresses:
+
+```
+local dns_resolution_config = {
+                dns_resolver = { { '8.8.4.4', 53 } },
+                refresh_interval = 30,
+                ip_black_list = {
+                    ['127.0.0.1'] = true
+                }
+            }
+```
+
+You can specify an ip_black_list.  When dns resolution occurs if the resolved ip matches any ip in the black list, the ip is remove
+from the list of available ips for that dns name.
+
+
+----
+
 # Limitations
 
 - Only IPv4 support.
@@ -364,9 +453,13 @@ The following is an example of the configuration defaults.  Any parameter not ov
 
 ## Create a background resolution
 
-**syntax:**  bgdns, err =  background_resolver.start(dns_name,[ configuration_table ])
+**syntax:**  bgdns, err =  background_resolver.start(dns_name, { configuration_table } )
+**syntax:**  bgdns, err =  background_resolver.start( {dns_name, dns_name} , { configuration_table } )
+**syntax:**  bgdns, err =  background_resolver.start({ { ['id'] = 'xxx', ['dns_name'] = 'yyy.yyy' }, {dns_table } } , { configuration_table } )
 
+**example:** bgdns, err =  background_resolver.start('www.bbc.co.uk', { dns_resolver = { { '10.10.0.2', 53 } } })
 **example:** bgdns, err =  background_resolver.start({'www.bbc.co.uk'}, { dns_resolver = { { '10.10.0.2', 53 } } })
+**example:** bgdns, err =  background_resolver.start({ ['id'] = 'bbc', ['dns_name'] = 'www.bbc.co.uk' }, { dns_resolver = { { '10.10.0.2', 53 } } })
 
 
 ## Legacy Create a background resolution

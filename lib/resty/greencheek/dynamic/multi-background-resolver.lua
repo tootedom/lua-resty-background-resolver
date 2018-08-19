@@ -106,7 +106,8 @@ function _M.start(dns_names, cfg)
             ['size'] = resolved_addresses_size,
             ['no_of_updates'] = (dns_entry_info['no_of_updates'] + 1),
             ['balancer_method'] = dns_entry_info['balancer_method'],
-            ['fallback'] = dns_entry_info['fallback']
+            ['fallback'] = dns_entry_info['fallback'],
+            ['allow_zero_ips'] = dns_entry_info['allow_zero_ips']
         }
 
         if balancing_type == balancing_type_round_robin then
@@ -150,12 +151,12 @@ function _M.start(dns_names, cfg)
             return true
         end
 
-        -- If dns actually returned no addresses.
-        if dns_name['fallback'] ~= nil and had_blacklisted_ips == false then
+        if dns_name['allow_zero_ips'] ~= nil and dns_name['allow_zero_ips'] == true then
             return true
         end
 
-        if dns_name['allow_zero_ips'] ~= nil and dns_name['allow_zero_ips'] == true then
+        -- If dns actually returned no addresses.
+        if dns_name['fallback'] ~= nil and had_blacklisted_ips == false then
             return true
         end
 
