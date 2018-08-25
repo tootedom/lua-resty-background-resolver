@@ -193,13 +193,13 @@ function _M.start(dns_names, cfg)
                 end
 
                 if _can_update_servers(number_of_valid_addresses,had_blacklisted_ips, dns_name) then
-                    _maybe_update_servers( dns_name, resolved_servers, resolved_servers_array, number_of_valid_addresses, cfg['balancing_type'])
+                    _maybe_update_servers( dns_name, resolved_servers, resolved_servers_array, number_of_valid_addresses, dns_name['balancing_type'])
                 end
             else
                 if answers.errcode == 3 or answers.errcode == 5 then
                     ngx_log(ngx_warn,"No resolved addresses for: ",dns_name['dns_name'])
                     if _can_update_servers(number_of_valid_addresses, had_blacklisted_ips, dns_name) then
-                        _maybe_update_servers( dns_name, resolved_servers, resolved_servers_array, number_of_valid_addresses, cfg['balancing_type'])
+                        _maybe_update_servers( dns_name, resolved_servers, resolved_servers_array, number_of_valid_addresses, dns_name['balancing_type'])
                     end
                 end
             end
@@ -298,6 +298,7 @@ function _M.start(dns_names, cfg)
 
             if name_info['balancing_type'] == nil then
                 config['balancer_method'] = get_balancer(cfg['balancing_type'])
+                name_info['balancing_type'] = cfg['balancing_type']
             else
                 config['balancer_method'] = get_balancer(name_info['balancing_type'])
             end
